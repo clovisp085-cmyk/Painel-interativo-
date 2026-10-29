@@ -1,0 +1,559 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Transferências por Mês</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: cabeçalho com carga da planilha, resumo, gráfico de barras por mês (também é filtro), filtros e tabela agrupada por mês */
+:root {
+  --bg: #e4eaec;
+  --surface: #ffffff;
+  --ink: #08171c;
+  --muted: #3a4d54;
+  --line: #94a8af;
+  --accent: #064e4b;
+  --accent-ink: #ffffff;
+  --accent-soft: #c9e0de;
+  --bar-soft: #8fb2b0;
+  --warn: #6f3500;
+  --warn-soft: #f1d9bd;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #071014;
+    --surface: #0f2027;
+    --ink: #f3f9fa;
+    --muted: #b5c9ce;
+    --line: #4f6a74;
+    --accent: #62d9cf;
+    --accent-ink: #031417;
+    --accent-soft: #1c4245;
+    --bar-soft: #3d726e;
+    --warn: #ffbd80;
+    --warn-soft: #4a2c0e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #071014;
+  --surface: #0f2027;
+  --ink: #f3f9fa;
+  --muted: #b5c9ce;
+  --line: #4f6a74;
+  --accent: #62d9cf;
+  --accent-ink: #031417;
+  --accent-soft: #1c4245;
+  --bar-soft: #3d726e;
+  --warn: #ffbd80;
+  --warn-soft: #4a2c0e;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* topo */
+.top { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; align-items: flex-end; }
+.eyebrow { margin: 0 0 4px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 6vw, 40px); line-height: 1.05; letter-spacing: -.01em; text-wrap: balance; }
+.load { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; max-width: 360px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 40px; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font: 500 14px var(--font-body); cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.hint { margin: 0; font-size: 12.5px; color: var(--muted); }
+#source { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; margin: 0; }
+.tag { font: 500 11px var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; background: var(--warn-soft); color: var(--warn); }
+.tag.ok { background: var(--accent-soft); color: var(--accent); }
+#msg { margin: 0; font-size: 13px; color: var(--warn); min-height: 0; }
+#msg:empty { display: none; }
+body.drag .top { outline: 2px dashed var(--accent); outline-offset: 8px; }
+
+/* resumo */
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-block: 2px solid var(--ink); margin: 0; }
+.summary > div { padding: 14px 16px; border-left: 1px solid var(--line); min-width: 0; }
+.summary > div:first-child { border-left: 0; padding-left: 0; }
+.summary dt { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.summary dd { margin: 4px 0 0; font-family: var(--font-data); font-size: 22px; font-weight: 500; overflow-wrap: anywhere; line-height: 1.2; }
+.summary dd.txt { font-family: var(--font-display); font-size: 19px; font-weight: 700; }
+.summary dd small { display: block; font: 400 12px var(--font-body); color: var(--muted); margin-top: 2px; }
+
+/* secoes */
+h2 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+.sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; margin-bottom: 12px; }
+.sec-head p { margin: 0; font-size: 13px; color: var(--muted); }
+
+/* grafico por mes */
+.chart { display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 8px; border-bottom: 1px solid var(--line); }
+.mcol { flex: 1 0 58px; max-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: 0; padding: 4px 2px 6px; border-radius: 6px; color: inherit; cursor: pointer; font: inherit; }
+.mcol:hover { background: var(--accent-soft); }
+.mplot { height: 150px; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; border-bottom: 2px solid var(--ink); }
+.mval { font: 500 13px var(--font-data); font-variant-numeric: tabular-nums; }
+.mval.zero { color: var(--muted); }
+.mbar { display: block; width: min(34px, 60%); background: var(--accent); border-radius: 3px 3px 0 0; }
+.chart.has-sel .mcol:not(.on) .mbar { background: var(--bar-soft); }
+.mcol.on { background: var(--accent-soft); }
+.mlab { font-size: 13px; font-weight: 500; text-transform: capitalize; line-height: 1.2; text-align: center; }
+.mlab small { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+
+/* filtros */
+.filters { display: flex; flex-direction: column; gap: 12px; }
+.frow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.search { flex: 1 1 240px; min-width: 0; min-height: 40px; padding: 8px 12px; border-radius: 6px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: 400 14px var(--font-body); }
+.search::placeholder { color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { min-height: 34px; padding: 4px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: 500 13px var(--font-body); cursor: pointer; }
+.chip span { font-family: var(--font-data); font-weight: 500; color: var(--muted); margin-left: 6px; }
+.chip:hover { border-color: var(--accent); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip.on span { color: inherit; opacity: 1; }
+.clear { background: none; border: 0; color: var(--accent); font: 500 13px var(--font-body); cursor: pointer; padding: 6px 4px; text-decoration: underline; }
+
+/* tabela */
+.tablebox { overflow-x: auto; border: 2px solid var(--ink); border-radius: 8px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; min-width: 700px; }
+td.pa { font-weight: 500; min-width: 180px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+thead th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--surface); font-weight: 600; background: var(--ink); border-bottom: 0; }
+td.id, td.dt { font-family: var(--font-data); font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.dt .hr { color: var(--muted); font-weight: 500; }
+td.un { font-weight: 500; }
+tr.grp th { background: var(--accent); color: var(--accent-ink); font: 700 15px var(--font-display); text-transform: capitalize; letter-spacing: 0; padding-block: 8px; }
+tr.grp th span { font: 500 13px var(--font-body); color: inherit; opacity: .9; margin-left: 10px; text-transform: none; }
+tr.grp.nodate th { background: var(--warn-soft); color: var(--warn); border-block: 1px solid var(--warn); }
+tbody tr:not(.grp):hover td { background: var(--accent-soft); }
+tbody tr:last-child td { border-bottom: 0; }
+.empty { padding: 28px 16px; color: var(--muted); text-align: center; }
+
+/* colunas */
+details { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 10px 14px; }
+summary { cursor: pointer; font-weight: 500; font-size: 14px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
+.cols label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); min-width: 0; }
+.cols select { min-height: 38px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: 400 14px var(--font-body); text-transform: none; letter-spacing: 0; min-width: 0; }
+
+@media (max-width: 640px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary > div:nth-child(3) { border-left: 0; padding-left: 0; }
+  .summary > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .load { max-width: none; }
+}
+</style>
+
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Transferências entre setores</p>
+      <h1>Transferências por mês</h1>
+    </div>
+    <div class="load">
+      <p id="source"></p>
+      <label class="btn primary" for="file">Carregar planilha</label>
+      <input class="sr" id="file" type="file" accept=".xlsx,.xls,.csv,.txt">
+      <p class="hint">No Google Planilhas: Arquivo → Fazer download → Microsoft Excel (.xlsx). Você também pode arrastar o arquivo para esta página. A leitura acontece no seu navegador.</p>
+      <p id="msg" role="status" aria-live="polite"></p>
+    </div>
+  </header>
+
+  <dl class="summary" id="summary"></dl>
+
+  <section aria-labelledby="h-meses">
+    <div class="sec-head">
+      <h2 id="h-meses">Por mês da transferência</h2>
+      <p id="chart-note">Clique em um mês para ver só ele.</p>
+    </div>
+    <div class="chart" id="chart"></div>
+  </section>
+
+  <section aria-labelledby="h-lista">
+    <div class="sec-head">
+      <h2 id="h-lista">Lista de transferências</h2>
+      <p id="count"></p>
+    </div>
+    <div class="filters">
+      <div class="frow">
+        <input class="search" id="q" type="search" placeholder="Buscar paciente, atendimento ou prontuário" aria-label="Buscar paciente, atendimento ou prontuário">
+        <button class="btn" id="sort" type="button"></button>
+        <button class="btn" id="copy" type="button">Copiar para planilha</button>
+      </div>
+      <div class="frow">
+        <div class="chips" id="units" role="group" aria-label="Setor de destino"></div>
+        <button class="clear" id="clear" type="button" hidden>Limpar filtros</button>
+      </div>
+    </div>
+    <div class="tablebox" style="margin-top:12px">
+      <table>
+        <thead><tr><th>Atendimento</th><th>Prontuário</th><th>Paciente</th><th>Data da transferência</th><th>Setor de destino</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <details id="colsbox">
+    <summary>Colunas usadas</summary>
+    <p class="hint" style="margin-top:8px">O painel procura as colunas pelo nome do cabeçalho. Se alguma vier errada, escolha a certa aqui.</p>
+    <div class="cols">
+      <label for="c-at">Atendimento<select id="c-at"></select></label>
+      <label for="c-pr">Prontuário<select id="c-pr"></select></label>
+      <label for="c-pa">Paciente<select id="c-pa"></select></label>
+      <label for="c-dt">Data da transferência<select id="c-dt"></select></label>
+      <label for="c-un">Setor de destino<select id="c-un"></select></label>
+    </div>
+  </details>
+</main>
+
+<script>
+(function () {
+  var MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  var MES_LONGO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  var FIELDS = ['at', 'pr', 'pa', 'dt', 'un'];
+
+  var state = {
+    matrix: [], headerRow: 0, headers: [], map: { at: 0, pr: 1, pa: 2, dt: 3, un: 4 },
+    rows: [], monthSel: null, unitSel: null, q: '', desc: false,
+    sample: true, fileName: ''
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function norm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function colLetter(i) {
+    var s = ''; i = i + 1;
+    while (i > 0) { var r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = Math.floor((i - 1) / 26); }
+    return s;
+  }
+
+  /* ---------- exemplo ---------- */
+  function sampleMatrix() {
+    var h = ['Atendimento', 'Prontuario', 'Paciente', 'Data Transferência', 'Unidade Destino'];
+    var nomes = {
+      '1672653': 'Helena Barros Souza', '222222': 'Carlos Eduardo Lima', '1458820': 'Marta Ribeiro Alves',
+      '903115': 'João Pedro Nogueira', '1190472': 'Ana Clara Teixeira', '774309': 'Roberto Campos Dias',
+      '2051837': 'Luiza Fernandes Rocha', '1834561': 'Paulo Henrique Matos'
+    };
+    var d = [
+      ['5120441', '1672653', '03/07/2026 09:20', 'Choque'],
+      ['5120987', '222222', '11/07/2026 14:05', 'UTI Adulto'],
+      ['5121310', '1458820', '19/07/2026 18:20', 'Choque'],
+      ['5121774', '903115', '26/07/2026 08:10', 'Clínica Cirúrgica'],
+      ['5122056', '1672653', '02/08/2026 11:45', 'Semi-intensiva'],
+      ['5122390', '1190472', '08/08/2026 16:30', 'UTI Adulto'],
+      ['5122841', '774309', '15/08/2026 07:55', 'Clínica Médica'],
+      ['5123115', '1458820', '21/08/2026 22:10', 'Choque'],
+      ['5123602', '2051837', '04/09/2026 13:40', 'Clínica Cirúrgica'],
+      ['5123988', '903115', '12/09/2026 10:15', 'Semi-intensiva'],
+      ['5124420', '1834561', '12/09/2026 19:50', 'UTI Adulto'],
+      ['5124871', '222222', '27/09/2026 06:30', 'Clínica Médica'],
+      ['5125233', '1190472', '05/10/2026 15:05', 'Choque'],
+      ['5125690', '2051837', '16/10/2026 12:25', 'Semi-intensiva'],
+      ['5126012', '774309', '23/10/2026 17:45', 'Clínica Cirúrgica']
+    ];
+    return [h].concat(d.map(function (r) { return [r[0], r[1], nomes[r[1]], r[2], r[3]]; }));
+  }
+
+  /* ---------- leitura da planilha ---------- */
+  function findHeaderRow(m) {
+    for (var i = 0; i < Math.min(m.length, 10); i++) {
+      var r = m[i] || [];
+      for (var j = 0; j < r.length; j++) {
+        var n = norm(r[j]);
+        if (n.indexOf('prontu') >= 0 || n.indexOf('transfer') >= 0) return i;
+      }
+    }
+    return -1;
+  }
+  function autoMap(headers) {
+    var H = headers.map(norm), map = { at: -1, pr: -1, pa: -1, dt: -1, un: -1 };
+    H.forEach(function (n, i) {
+      if (map.pr < 0 && n.indexOf('prontu') >= 0) map.pr = i;
+      if (map.pa < 0 && (n.indexOf('paciente') >= 0 || n === 'nome')) map.pa = i;
+      if (map.un < 0 && n.indexOf('destin') >= 0) map.un = i;
+      if (map.dt < 0 && n.indexOf('transfer') >= 0 && (n.indexOf('data') >= 0 || n.indexOf('dt') >= 0)) map.dt = i;
+      if (map.at < 0 && n.indexOf('atend') >= 0 && n.indexOf('data') < 0 && n.indexOf('dt') < 0) map.at = i;
+    });
+    if (map.dt < 0) H.forEach(function (n, i) { if (map.dt < 0 && n.indexOf('transfer') >= 0 && n.indexOf('unidade') < 0) map.dt = i; });
+    var fb = { at: 0, pr: 1, pa: 2, dt: 6, un: 7 };
+    FIELDS.forEach(function (f) { if (map[f] < 0) map[f] = Math.min(fb[f], Math.max(headers.length - 1, 0)); });
+    return map;
+  }
+  function parseDate(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') {
+      if (v > 20000 && v < 90000) return Math.round((v - 25569) * 864e5);
+      return null;
+    }
+    var s = String(v).trim(), m;
+    m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) {
+      var d = +m[1], mo = +m[2], y = +m[3];
+      if (y < 100) y += 2000;
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return Date.UTC(y, mo - 1, d, +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+    }
+    m = s.match(/(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+    return null;
+  }
+  function cellText(v) {
+    if (v == null) return '';
+    if (typeof v === 'number') return String(v);
+    return String(v).trim();
+  }
+  function buildRows() {
+    var m = state.matrix, map = state.map, out = [];
+    for (var i = state.headerRow + 1; i < m.length; i++) {
+      var r = m[i] || [];
+      var at = cellText(r[map.at]), pr = cellText(r[map.pr]), pa = cellText(r[map.pa]).replace(/\s+/g, ' '), un = cellText(r[map.un]).replace(/\s+/g, ' ');
+      var ts = parseDate(r[map.dt]);
+      if (!at && !pr && !un && ts == null && cellText(r[map.dt]) === '') continue;
+      var row = { at: at, pr: pr, pa: pa, unit: un || '(sem setor)', ukey: (un || '(sem setor)').toLowerCase(), ts: ts, key: null, line: i + 1 };
+      if (ts != null) { var dd = new Date(ts); row.key = dd.getUTCFullYear() + '-' + pad(dd.getUTCMonth() + 1); }
+      out.push(row);
+    }
+    state.rows = out;
+  }
+  function setMatrix(matrix) {
+    state.matrix = matrix;
+    var hr = findHeaderRow(matrix);
+    state.headerRow = hr < 0 ? 0 : hr;
+    state.headers = (matrix[state.headerRow] || []).map(function (h, i) { return cellText(h) || ('Coluna ' + colLetter(i)); });
+    state.map = autoMap(state.headers);
+    state.monthSel = null; state.unitSel = null; state.q = ''; $('q').value = '';
+    buildColumnSelects();
+    buildRows();
+  }
+  function buildColumnSelects() {
+    FIELDS.forEach(function (f) {
+      var sel = $('c-' + f);
+      sel.innerHTML = state.headers.map(function (h, i) {
+        return '<option value="' + i + '">' + colLetter(i) + ' · ' + esc(h) + '</option>';
+      }).join('');
+      sel.value = String(state.map[f]);
+    });
+  }
+
+  /* ---------- filtros ---------- */
+  function filt(skip) {
+    var q = state.q.trim().toLowerCase();
+    return state.rows.filter(function (r) {
+      if (q && r.at.toLowerCase().indexOf(q) < 0 && r.pr.toLowerCase().indexOf(q) < 0 && norm(r.pa).indexOf(norm(q)) < 0) return false;
+      if (skip !== 'unit' && state.unitSel && r.ukey !== state.unitSel) return false;
+      if (skip !== 'month' && state.monthSel && r.key !== state.monthSel) return false;
+      return true;
+    });
+  }
+  function monthLabel(key) { var p = key.split('-'); return MES_LONGO[+p[1] - 1] + ' de ' + p[0]; }
+  function fmtDate(ts) {
+    var d = new Date(ts);
+    return { day: pad(d.getUTCDate()) + '/' + pad(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear(), hour: pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) };
+  }
+  function plural(n, a, b) { return n + ' ' + (n === 1 ? a : b); }
+
+  /* ---------- renderização ---------- */
+  function renderSummary(view) {
+    var pats = {}, units = {}, months = {}, uLabel = {};
+    view.forEach(function (r) {
+      if (r.pr) pats[r.pr] = 1;
+      units[r.ukey] = (units[r.ukey] || 0) + 1; if (!uLabel[r.ukey]) uLabel[r.ukey] = r.unit;
+      if (r.key) months[r.key] = (months[r.key] || 0) + 1;
+    });
+    function top(o) { var b = null; Object.keys(o).forEach(function (k) { if (b === null || o[k] > o[b]) b = k; }); return b; }
+    var tu = top(units), tm = top(months);
+    var nodate = view.filter(function (r) { return r.ts == null; }).length;
+    $('summary').innerHTML =
+      '<div><dt>Transferências</dt><dd>' + view.length + (nodate ? '<small>' + plural(nodate, 'sem data válida', 'sem data válida') + '</small>' : '') + '</dd></div>' +
+      '<div><dt>Pacientes (prontuários)</dt><dd>' + Object.keys(pats).length + '</dd></div>' +
+      '<div><dt>Mês com mais</dt><dd class="txt">' + (tm ? esc(MES_LONGO[+tm.split('-')[1] - 1]) + '<small>' + months[tm] + ' em ' + tm.split('-')[0] + '</small>' : '–') + '</dd></div>' +
+      '<div><dt>Setor mais frequente</dt><dd class="txt">' + (tu ? esc(uLabel[tu]) + '<small>' + units[tu] + ' transferências</small>' : '–') + '</dd></div>';
+  }
+
+  function renderChart() {
+    var base = filt('month'), counts = {}, keys = [];
+    base.forEach(function (r) { if (r.key) counts[r.key] = (counts[r.key] || 0) + 1; });
+    var all = Object.keys(counts).sort();
+    if (!all.length) { $('chart').innerHTML = '<p class="empty" style="width:100%">Nenhuma transferência com data válida.</p>'; $('chart').className = 'chart'; return; }
+    var a = all[0].split('-'), z = all[all.length - 1].split('-');
+    var y = +a[0], m = +a[1], ey = +z[0], em = +z[1];
+    while (y < ey || (y === ey && m <= em)) { keys.push(y + '-' + pad(m)); m++; if (m > 12) { m = 1; y++; } }
+    var max = 0; keys.forEach(function (k) { max = Math.max(max, counts[k] || 0); });
+    var multiYear = a[0] !== z[0];
+    $('chart').className = 'chart' + (state.monthSel ? ' has-sel' : '');
+    $('chart').innerHTML = keys.map(function (k) {
+      var n = counts[k] || 0, p = k.split('-');
+      var h = n ? Math.max(4, Math.round(n / max * 112)) : 0;
+      return '<button type="button" class="mcol' + (state.monthSel === k ? ' on' : '') + '" data-k="' + k + '" aria-pressed="' + (state.monthSel === k) + '" title="' + esc(monthLabel(k)) + ': ' + plural(n, 'transferência', 'transferências') + '">' +
+        '<span class="mplot"><span class="mval' + (n ? '' : ' zero') + '">' + n + '</span><span class="mbar" style="height:' + h + 'px"></span></span>' +
+        '<span class="mlab">' + MES[+p[1] - 1] + (multiYear || true ? '<small>' + p[0] + '</small>' : '') + '</span></button>';
+    }).join('');
+  }
+
+  function renderUnits() {
+    var base = filt('unit'), c = {}, lab = {};
+    base.forEach(function (r) { c[r.ukey] = (c[r.ukey] || 0) + 1; if (!lab[r.ukey]) lab[r.ukey] = r.unit; });
+    var keys = Object.keys(c).sort(function (x, y) { return c[y] - c[x] || lab[x].localeCompare(lab[y], 'pt'); });
+    if (state.unitSel && keys.indexOf(state.unitSel) < 0) {
+      var any = state.rows.find(function (r) { return r.ukey === state.unitSel; });
+      keys.push(state.unitSel); c[state.unitSel] = 0; lab[state.unitSel] = any ? any.unit : state.unitSel;
+    }
+    $('units').innerHTML = '<button type="button" class="chip' + (!state.unitSel ? ' on' : '') + '" data-u="">Todos os setores<span>' + base.length + '</span></button>' +
+      keys.map(function (k) {
+        return '<button type="button" class="chip' + (state.unitSel === k ? ' on' : '') + '" data-u="' + esc(k) + '">' + esc(lab[k]) + '<span>' + c[k] + '</span></button>';
+      }).join('');
+  }
+
+  function sortedGroups(view) {
+    var dir = state.desc ? -1 : 1, groups = {}, nodate = [];
+    view.forEach(function (r) { if (r.key) (groups[r.key] = groups[r.key] || []).push(r); else nodate.push(r); });
+    var keys = Object.keys(groups).sort(); if (state.desc) keys.reverse();
+    var out = keys.map(function (k) {
+      groups[k].sort(function (a, b) { return (a.ts - b.ts) * dir; });
+      return { key: k, rows: groups[k] };
+    });
+    if (nodate.length) out.push({ key: null, rows: nodate });
+    return out;
+  }
+
+  function renderTable(view) {
+    var groups = sortedGroups(view);
+    if (!view.length) { $('rows').innerHTML = '<tr><td colspan="5" class="empty">Nenhuma transferência com esses filtros.</td></tr>'; return; }
+    $('rows').innerHTML = groups.map(function (g) {
+      var head = '<tr class="grp' + (g.key ? '' : ' nodate') + '"><th colspan="5">' + (g.key ? esc(monthLabel(g.key)) : 'Sem data de transferência válida') +
+        '<span>' + plural(g.rows.length, 'transferência', 'transferências') + '</span></th></tr>';
+      return head + g.rows.map(function (r) {
+        var dt = r.ts != null ? (function () { var f = fmtDate(r.ts); return f.day + ' <span class="hr">' + f.hour + '</span>'; })() : '<span class="hr">–</span>';
+        return '<tr><td class="id">' + esc(r.at || '–') + '</td><td class="id">' + esc(r.pr || '–') + '</td><td class="pa">' + esc(r.pa || '–') + '</td><td class="dt">' + dt + '</td><td class="un">' + esc(r.unit) + '</td></tr>';
+      }).join('');
+    }).join('');
+  }
+
+  function renderSource() {
+    $('source').innerHTML = state.sample
+      ? '<span class="tag">Exemplo</span> Dados fictícios. Carregue sua planilha.'
+      : '<span class="tag ok">Planilha</span> ' + esc(state.fileName) + ' · ' + plural(state.rows.length, 'linha lida', 'linhas lidas');
+  }
+
+  function render() {
+    var view = filt();
+    renderSource();
+    renderSummary(view);
+    renderChart();
+    renderUnits();
+    renderTable(view);
+    $('count').textContent = plural(view.length, 'transferência', 'transferências') + (state.monthSel ? ' em ' + monthLabel(state.monthSel) : '');
+    $('sort').textContent = state.desc ? 'Mais recentes primeiro' : 'Mais antigas primeiro';
+    $('clear').hidden = !(state.monthSel || state.unitSel || state.q.trim());
+    $('chart-note').textContent = state.monthSel ? 'Mostrando só ' + monthLabel(state.monthSel) + '. Clique de novo para voltar a todos.' : 'Clique em um mês para ver só ele.';
+  }
+
+  /* ---------- eventos ---------- */
+  $('chart').addEventListener('click', function (e) {
+    var b = e.target.closest('.mcol'); if (!b) return;
+    state.monthSel = state.monthSel === b.getAttribute('data-k') ? null : b.getAttribute('data-k');
+    render();
+  });
+  $('units').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    var u = b.getAttribute('data-u');
+    state.unitSel = (u && state.unitSel !== u) ? u : null;
+    render();
+  });
+  $('q').addEventListener('input', function (e) { state.q = e.target.value; render(); });
+  $('sort').addEventListener('click', function () { state.desc = !state.desc; render(); });
+  $('clear').addEventListener('click', function () { state.monthSel = null; state.unitSel = null; state.q = ''; $('q').value = ''; render(); });
+  FIELDS.forEach(function (f) {
+    $('c-' + f).addEventListener('change', function (e) {
+      state.map[f] = +e.target.value; state.monthSel = null; state.unitSel = null; buildRows(); render();
+    });
+  });
+
+  function showMsg(t) { $('msg').textContent = t || ''; }
+  $('copy').addEventListener('click', function () {
+    var groups = sortedGroups(filt()), lines = ['Atendimento\tProntuário\tPaciente\tData da transferência\tSetor de destino'];
+    groups.forEach(function (g) {
+      g.rows.forEach(function (r) {
+        var f = r.ts != null ? fmtDate(r.ts) : null;
+        lines.push([r.at, r.pr, r.pa, f ? f.day + ' ' + f.hour : '', r.unit].join('\t'));
+      });
+    });
+    var text = lines.join('\n'), btn = $('copy');
+    function done(ok) {
+      btn.textContent = ok ? 'Copiado' : 'Não foi possível copiar';
+      setTimeout(function () { btn.textContent = 'Copiar para planilha'; }, 1800);
+    }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); var ok = document.execCommand('copy'); document.body.removeChild(ta); done(ok);
+      } catch (err) { done(false); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    else fallback();
+  });
+
+  function readWorkbook(wb) {
+    var pick = null, matrix = null;
+    for (var i = 0; i < wb.SheetNames.length; i++) {
+      var ws = wb.Sheets[wb.SheetNames[i]];
+      var mx = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      if (!matrix) matrix = mx;
+      if (findHeaderRow(mx) >= 0) { matrix = mx; pick = true; break; }
+    }
+    return matrix || [];
+  }
+  function loadFile(f) {
+    if (!f) return;
+    if (typeof XLSX === 'undefined') { showMsg('Não foi possível carregar o leitor de planilhas. Verifique a conexão e abra a página de novo.'); return; }
+    showMsg('');
+    var isText = /\.(csv|txt)$/i.test(f.name);
+    var rd = new FileReader();
+    rd.onerror = function () { showMsg('Não foi possível abrir esse arquivo.'); };
+    rd.onload = function () {
+      try {
+        var wb = isText ? XLSX.read(rd.result, { type: 'string', raw: true }) : XLSX.read(rd.result, { type: 'array', raw: true });
+        var matrix = readWorkbook(wb);
+        if (matrix.length < 2) { showMsg('A planilha está vazia ou sem linhas de dados.'); return; }
+        state.sample = false; state.fileName = f.name;
+        setMatrix(matrix);
+        render();
+        var found = findHeaderRow(matrix) >= 0;
+        if (!found) showMsg('Não achei os nomes das colunas. Confira em "Colunas usadas" abaixo.');
+        else if (!state.rows.some(function (r) { return r.ts != null; })) showMsg('Nenhuma data válida na coluna ' + colLetter(state.map.dt) + '. Confira em "Colunas usadas" abaixo.');
+      } catch (err) { showMsg('Não foi possível ler esse arquivo. Use .xlsx ou .csv.'); }
+    };
+    if (isText) rd.readAsText(f); else rd.readAsArrayBuffer(f);
+  }
+  $('file').addEventListener('change', function (e) { loadFile(e.target.files[0]); e.target.value = ''; });
+  ['dragenter', 'dragover'].forEach(function (t) { document.addEventListener(t, function (e) { e.preventDefault(); document.body.classList.add('drag'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { document.addEventListener(t, function (e) { e.preventDefault(); if (t === 'drop' || e.target === document || e.relatedTarget === null) document.body.classList.remove('drag'); }); });
+  document.addEventListener('drop', function (e) { var f = e.dataTransfer && e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+  setMatrix(sampleMatrix());
+  render();
+})();
+</script>
+
+</body></html>
